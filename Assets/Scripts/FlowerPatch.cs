@@ -15,12 +15,12 @@ public class FlowerPatch : MonoBehaviour
     public const float AreaDiameter = 20f;
 
     /// <summary>
-    /// The list of all flowers in the flower area
+    /// The list of all flowers in the flower patch
     /// </summary>
     public List<Flower> Flowers { get; private set; } = new List<Flower>();
 
     /// <summary>
-    /// List of all flower plants in the area (each plant has multiple flowers)
+    /// List of all flower plants in the patch (each plant has multiple flowers)
     /// </summary>
     private List<GameObject> flowerPlants = new List<GameObject>();
 
