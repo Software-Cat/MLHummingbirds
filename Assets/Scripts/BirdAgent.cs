@@ -98,23 +98,10 @@ public class BirdAgent : Agent
     private Vector2 lookInput;
 
     /// <summary>
-    /// Called when agent activates
-    /// </summary>
-    new private void OnEnable()
-    {
-        base.OnEnable();
-
-        // Bind input actions
-        GameManager.Instance.GameControls.Player.Move.performed += OnMove;
-        GameManager.Instance.GameControls.Player.Look.performed += OnLook;
-        GameManager.Instance.GameControls.Player.Look.performed += OnFloat;
-    }
-
-    /// <summary>
     /// InputAction callback for move input
     /// </summary>
     /// <param name="context">The CallbackContext for the InputAction</param>
-    private void OnMove(InputAction.CallbackContext context)
+    public void OnMove(InputAction.CallbackContext context)
     {
         moveInput = context.ReadValue<Vector2>();
     }
@@ -123,7 +110,7 @@ public class BirdAgent : Agent
     /// InputAction callback for look input
     /// </summary>
     /// <param name="context">The CallbackContext for the InputAction</param>
-    private void OnLook(InputAction.CallbackContext context)
+    public void OnLook(InputAction.CallbackContext context)
     {
         lookInput = context.ReadValue<Vector2>();
     }
@@ -132,7 +119,7 @@ public class BirdAgent : Agent
     /// InputAction callback for float up and down input
     /// </summary>
     /// <param name="context">The CallbackContext for the InputAction</param>
-    private void OnFloat(InputAction.CallbackContext context)
+    public void OnFloat(InputAction.CallbackContext context)
     {
         floatInput = context.ReadValue<float>();
     }
@@ -143,7 +130,7 @@ public class BirdAgent : Agent
     public override void Initialize()
     {
         rigidbody = GetComponent<Rigidbody>();
-        flowerPatch = GetComponentInParent<FlowerPatch>();
+        flowerPatch = FindObjectOfType<FlowerPatch>();
 
         // Play forever if not training
         if (!trainingMode)
@@ -292,7 +279,7 @@ public class BirdAgent : Agent
         Vector3 up = floatInput * transform.up;
 
         // Look inputs
-        float pitch = lookInput.y;
+        float pitch = -lookInput.y;
         float yaw = lookInput.x;
 
         // Combine movement vectors and normalize
@@ -304,6 +291,28 @@ public class BirdAgent : Agent
         actionsOut[2] = combined.z;
         actionsOut[3] = pitch;
         actionsOut[4] = yaw;
+    }
+
+    /// <summary>
+    /// Prevent the agent from moving and taking actions
+    /// </summary>
+    public void FreezeAgent()
+    {
+        Debug.Assert(trainingMode == false, "Freeze/Unfreeze not supported in training");
+
+        frozen = true;
+        rigidbody.Sleep();
+    }
+
+    /// <summary>
+    /// Resume agent movement and actions
+    /// </summary>
+    public void UnfreezeAgent()
+    {
+        Debug.Assert(trainingMode == false, "Freeze/Unfreeze not supported in training");
+
+        frozen = false;
+        rigidbody.WakeUp();
     }
 
     /// <summary>
@@ -403,4 +412,96 @@ public class BirdAgent : Agent
         }
     }
 
+    /// <summary>
+    /// Called when the agent's collider enters a trigger
+    /// </summary>
+    /// <param name="other">The trigger collider</param>
+    private void OnTriggerEnter(Collider other)
+    {
+        OnTriggerEndterOrStay(other);
+    }
+
+    /// <summary>
+    /// Called when the agent's collider stays in a trigger
+    /// </summary>
+    /// <param name="other">The trigger collider</param>
+    private void OnTriggerStay(Collider other)
+    {
+        OnTriggerEndterOrStay(other);
+    }
+
+    /// <summary>
+    /// Called when the agent's collider enters or stays in a trigger
+    /// </summary>
+    /// <param name="other">The trigger collider</param>
+    private void OnTriggerEndterOrStay(Collider other)
+    {
+        // Check if colliding with nectar
+        if (other.CompareTag(GameManager.NectarTag))
+        {
+            Vector3 closestPointToBeak = other.ClosestPoint(beakTip.position);
+
+            // Check if beak tip is in nectar collider
+            if (Vector3.Distance(beakTip.position, closestPointToBeak) < BeakTipRadius)
+            {
+                // Look up the flower for this nectar collider
+                Flower flower = flowerPatch.GetFlowerFromNectar(other);
+
+                // Attempt to take nectar
+                float nectarReceived = flower.Feed(.01f);
+
+                // Keep track of nectar obtained
+                NectarObtained += nectarReceived;
+
+                if (trainingMode)
+                {
+                    // Calculate reward for getting nectar
+                    float bonus = .02f * Mathf.Clamp01(Vector3.Dot(transform.forward.normalized, -nearestFlower.FlowerUpVector.normalized));
+                    AddReward(.01f + bonus);
+                }
+
+                // If flower is empty, update nearest flower
+                if (!flower.HasNectar)
+                {
+                    UpdateNearestFlower();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Called when the agent collides with something solid
+    /// </summary>
+    /// <param name="collision">The collision information</param>
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (trainingMode && collision.collider.CompareTag(GameManager.BoundaryTag))
+        {
+            // Give punishment for colliding with boundary
+            AddReward(-.5f);
+        }
+    }
+
+    /// <summary>
+    /// Called every frame
+    /// </summary>
+    private void Update()
+    {
+        if (nearestFlower != null)
+        {
+            Debug.DrawLine(beakTip.position, nearestFlower.FlowerCenterPosition, Color.green);
+        }
+    }
+
+    /// <summary>
+    /// Called every fixed time interval
+    /// </summary>
+    private void FixedUpdate()
+    {
+        // If flower got stolen by opponent before agent could get to it.
+        if (nearestFlower != null && !nearestFlower.HasNectar)
+        {
+            UpdateNearestFlower();
+        }
+    }
 }

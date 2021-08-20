@@ -9,17 +9,29 @@ public class GameManager : MonoBehaviour
 
     public const string FlowerPlantTag = "FlowerPlant";
 
-    public GameControls GameControls = new GameControls();
+    public const string NectarTag = "Nectar";
+
+    public const string BoundaryTag = "Boundary";
+
+    public GameControls GameControls;
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-        }
-        else
+        if (Instance == null)
         {
             Instance = this;
         }
+        else
+        {
+            Destroy(gameObject);
+        }
+
+        GameControls = new GameControls();
+    }
+
+    private void Start()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 }
